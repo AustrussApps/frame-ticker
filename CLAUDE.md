@@ -118,6 +118,15 @@ is the sorter's working list, not part of the pack; ignore it. `unpacked` /
 keeps (spacing and case in the sorter's names drift). Pack numbers stay the
 sorter's own. The Pack Sorter's source isn't in this org's GitHub.
 
+Under each pack heading `packPictureSvg` draws the pack from above, one
+panel per level, ticked frames green, the base dashed behind each layer. The
+save has sizes (`l`, `w`, already turned when `swapped`) but positions only
+for hand-placed layers (`pos`: `[along l, along w]`); otherwise a layer's
+frames sit side by side along the length, or across the width when the layer
+is `stacked`, which is how the sorter adds up `totalL` / `totalW`. A pack whose
+width is its longer side is drawn turned so it isn't a sliver. It's our
+drawing from the saved numbers, not the Pack Sorter's own picture.
+
 RLS restricts the anon (publishable) key to select and insert. The publishable
 key is hardcoded in the HTML by design; that's what it's for. The Worker's
 `APP_KEY` is **not** in the repo and must never be committed: it's entered on

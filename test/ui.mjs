@@ -404,7 +404,8 @@ check('newest save wins', [new URL(packCall.url).searchParams.get('order'), new 
 check('no plan: no toggle', $('orderBar').style.display, 'none');
 
 const PLAN = { packs: [
-  { base: { name: 'N101-1' }, layers: [{ frames: [{ name: 'L501 (WELD)' }] }], skipped: [{ name: 'L500' }] }
+  { base: { name: 'N101-1', l: 2000, w: 1000 }, layers: [{ frames: [{ name: 'L501 (WELD)', l: 1200, w: 900 }, { name: 'GONE', l: 600, w: 900 }] }],
+    skipped: [{ name: 'L500' }] }
 ], unpacked: [], oversized: [] };
 const okRoute = w.fetch;
 w.fetch = async (url, opts) => String(url).includes('/rest/v1/sessions')
@@ -424,7 +425,17 @@ check('pack order: base first, then layers; frames not in the plan last',
 check('each row says where it sits in the pack',
   [...rows()].map(r => (r.querySelector('.pack-where') || {}).textContent || ''), ['Base', 'Layer 1', '']);
 check('pack heading counts what is done', d.querySelector('.pack-header .pack-meta').textContent, '0 / 2 done');
+const pic = () => d.querySelector('#frameList .pack-picture');
+check('pack picture under its heading: one panel per level',
+  [pic().previousElementSibling.classList.contains('pack-header'), [...pic().querySelectorAll('figcaption')].map(e => e.textContent)],
+  [true, ['Base', 'Layer 1']]);
+check('layer frames sit side by side along the length, base outline behind them',
+  [...pic().querySelectorAll('.pp-level')[1].querySelectorAll('rect')].map(r => r.getAttribute('class') + '@' + r.getAttribute('x')),
+  ['pp-outline@1', 'pp-todo@1.0', 'pp-other@103.0']);
+check('a frame in the plan but not the report is drawn grey with its plan name',
+  pic().querySelector('.pp-other title').textContent, 'GONE');
 click(rows()[0]);
+check('ticking turns the frame green in the picture', pic().querySelector('.pp-level rect').getAttribute('class'), 'pp-done');
 check('ticking in pack order ticks the right frame',
   [w.eval('AppState.doneSet.has("N101-1")'), d.querySelector('.pack-header .pack-meta').textContent], [true, '1 / 2 done']);
 check('choice remembered on this tablet', w.localStorage.getItem('fc_list_order'), 'pack');
