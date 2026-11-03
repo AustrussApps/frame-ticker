@@ -102,6 +102,21 @@ Project is shared with the structural app; tables are separate.
 |---|---|
 | `session_log`, `frame_issues` | This app. |
 | `ss_session_log`, `ss_issues` | Structural app. Leave alone. |
+| `sessions` | Austruss Frame Pack Sorter's saved pack plans. **Read only here**; never write it. |
+
+**Pack order** (`getPackPlan`, `packOrder`): when the Pack Sorter has a plan
+for the job, a Report order / Pack order toggle shows above the frame list
+(report order is the default; the choice is remembered per tablet in
+`fc_list_order`). The plan is the newest `sessions` row whose `job_wo` is the
+work order, or, since some saves have no work order (W-14394), whose
+`job_num` / `job_title` / `job_sub` equal the report header's job number,
+title and section. `content.packs` is in pack order, each a `base` plus
+`layers[].frames[]`, listed base first (the bay's choice). A pack's `skipped`
+is the sorter's working list, not part of the pack; ignore it. `unpacked` /
+`oversized` show as "Not in a pack", report frames missing from the plan as
+"Not in the pack plan". Names match on the frame name the report parser
+keeps (spacing and case in the sorter's names drift). Pack numbers stay the
+sorter's own. The Pack Sorter's source isn't in this org's GitHub.
 
 RLS restricts the anon (publishable) key to select and insert. The publishable
 key is hardcoded in the HTML by design; that's what it's for. The Worker's
