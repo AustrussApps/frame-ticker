@@ -170,9 +170,12 @@ w.eval(`AppState.jobs = ${JSON.stringify([
   Object.assign({}, jobs[0], { workOrderId: 'W-5', liveSince: null, sessionCount: 1, complete: 'Not Started' }),
   Object.assign({}, jobs[0], { workOrderId: 'W-6', liveSince: null, sessionCount: 0, complete: 'Not Started' })
 ])}; renderJobList();`);
-check('card top: In progress token (if open), Started / Not started, then the Smartsheet badge',
+check('card top: In progress token (if open), then Started / Not started; no Smartsheet badge',
   [...d.querySelectorAll('.job-card')].map(c => [...c.querySelectorAll('.status-tokens > span')].map(e => e.textContent)),
-  [['In progress', 'Started', 'Partially Complete'], ['Started', 'Not Started'], ['Not started', 'Not Started']]);
+  [['In progress', 'Started'], ['Started'], ['Not started']]);
+w.eval(`AppState.jobs[0].complete = 'Complete'; AppState.jobs[0].liveSince = null; renderJobList();`);
+check('a job Smartsheet marks Complete says Complete', d.querySelector('.job-card .started-token').textContent, 'Complete');
+check('no status badge left on any card', d.querySelectorAll('.job-card .badge').length, 0);
 
 console.log('\nwork orders from the Work Order sheet');
 reportCalls.length = 0;
@@ -198,7 +201,7 @@ check('no Complete job in it', d.querySelectorAll('.job-card .badge.complete').l
 const fetchedSoFar = reportCalls.length;
 click(tabs()[2]);
 await tick(50);
-check('Completed: every Complete FRAMECAD work order, badged green', [d.querySelectorAll('.job-card').length, d.querySelectorAll('.job-card .badge.complete').length], [220, 220]);
+check('Completed: every Complete FRAMECAD work order, marked Complete', [d.querySelectorAll('.job-card').length, d.querySelectorAll('.job-card .started-token.complete').length], [220, 220]);
 check('switching between the two shares one fetch', reportCalls.length, fetchedSoFar);
 click($('btnRefreshJobs'));
 await waitFor(() => reportCalls.length > fetchedSoFar);

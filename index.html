@@ -217,7 +217,7 @@
   .machine-chip.unset{color:var(--muted);font-weight:700;}
   #jobHeader .machine-chip{height:22px;margin-left:8px;vertical-align:middle;font-size:12px;
     border-color:rgba(255,255,255,.3);background:transparent;color:#fff;}
-  /* Status tokens on the card's dark top bar, next to the Smartsheet badge. */
+  /* Status tokens on the card's dark top bar. */
   .status-tokens{display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;}
   .live-token{
     display:inline-flex;align-items:center;gap:6px;
@@ -232,13 +232,7 @@
     font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;
   }
   .started-token.yes{border-color:rgba(255,255,255,.6);color:#fff;}
-  .badge{
-    display:inline-block;padding:4px 12px;border-radius:20px;
-    font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;
-  }
-  .badge.not-started{background:#4A4744;color:#EDEAE5;}
-  .badge.partial{background:var(--orange);color:#fff;}
-  .badge.complete{background:var(--good);color:#fff;}
+  .started-token.complete{border-color:var(--good);background:var(--good);color:#fff;}
 
   /* ---------- Job list: which list + search ---------- */
   #jobListTabs{display:flex;gap:6px;margin-bottom:10px;}
@@ -1550,7 +1544,7 @@ async function loadJobs(force){
 
 // "Started" once the app has any record of work on the job: a saved
 // session, a session open now, or Smartsheet already past Not Started (Save
-// Progress without Start Job logs no session, so the badge covers that).
+// Progress without Start Job logs no session; Smartsheet's status covers it).
 function jobStarted(job){
   return !!(job.sessionCount || job.liveSince ||
     (job.complete && job.complete !== 'Not Started'));
@@ -1585,8 +1579,11 @@ function renderJobList(){
   }
   container.innerHTML = '';
   visible.forEach(job => {
-    const badgeClass = job.complete === 'Partially Complete' ? 'partial'
-                     : job.complete === 'Complete' ? 'complete' : 'not-started';
+    // The card no longer shows Smartsheet's Complete badge (the bay found
+    // Partially Complete unnecessary next to these tokens), except that a
+    // job marked Complete says so instead of just "Started".
+    const done = job.complete === 'Complete';
+    const started = jobStarted(job);
     const sessionCount = job.sessionCount || 0;
     const div = document.createElement('div');
     div.className = 'job-card';
@@ -1597,8 +1594,8 @@ function renderJobList(){
         '<span class="status-tokens">' +
           (job.liveSince ? '<span class="live-token" title="Session started ' + escapeHtml(formatTime(job.liveSince)) + '">' +
             '<span class="pulse"></span>In progress</span>' : '') +
-          '<span class="started-token' + (jobStarted(job) ? ' yes' : '') + '">' + (jobStarted(job) ? 'Started' : 'Not started') + '</span>' +
-          '<span class="badge ' + badgeClass + '">' + escapeHtml(job.complete || 'Not Started') + '</span>' +
+          '<span class="started-token' + (done ? ' complete' : started ? ' yes' : '') + '">' +
+            (done ? 'Complete' : started ? 'Started' : 'Not started') + '</span>' +
         '</span>' +
       '</div>' +
       '<div class="card-body">' +

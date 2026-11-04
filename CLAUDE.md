@@ -195,7 +195,9 @@ older than `ACTIVE_SESSION_HOURS` (12) are ignored in case a tablet never
 saves. This tablet's own open session always counts, even if its start didn't
 reach Supabase. Next to it the card says **Started** once the job has a saved
 session, an open one, or Smartsheet's Complete is past Not Started (Save
-Progress without Start Job logs no session); otherwise **Not started**. Start
+Progress without Start Job logs no session); otherwise **Not started**; and
+**Complete** when Smartsheet's Complete says so. The card shows no other
+Smartsheet status badge: the bay found Partially Complete unnecessary. Start
 Job writes nothing else: no `session_log` row until the save.
 
 **Never work from the app's own markup**, or each save stacks new marks on old
