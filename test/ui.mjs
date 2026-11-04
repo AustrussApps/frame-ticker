@@ -78,7 +78,7 @@ process.on('unhandledRejection', e => runtimeErrors.push('unhandled rejection: '
 const code = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(x => x[1]).join('\n');
 const expose = '\n;Object.assign(window,{Store,AppState,CONFIG,renderJobList,renderFrameList,showScreen,' +
                'setTabbarVisible,openJob,getWorkOrders,renderSessionList,updateSessionBar,' +
-               'pickWorkingVersion,markupKeywords,parseMarkupKeywords,loadWorkingDetailer,findDrawingPage});';
+               'pickWorkingVersion,markupKeywords,parseMarkupKeywords,loadWorkingDetailer,findDrawingPage,openSessionsFrom});';
 try{
   w.eval(code + expose);
 }catch(e){
@@ -102,12 +102,12 @@ check('setup screen shown when unconfigured', active('screen-setup'), true);
 /* ------------------------------------------------------------ work orders */
 console.log('\nwork orders from the Smartsheet reports');
 const cell = (col, value, displayValue) => ({ virtualColumnId: col, value, displayValue });
-const COLS = ['Primary', 'Work Order Type', 'Project & Zone Number', 'Complete', 'F_Profile', 'Designer']
+const COLS = ['Primary', 'Work Order Type', 'Project & Zone Number', 'Complete', 'F_Profile', 'Designer', 'Scheduled Machine']
   .map((title, i) => ({ title, virtualId: i + 1 }));
 const woRow = (id, wo, type, zone, complete, extra) =>
   ({ id, sheetId: 2, cells: [cell(1, wo), cell(2, type), cell(3, zone), cell(4, complete)].concat(extra || []) });
 const SCHEDULE = [
-  woRow(1, 'W-100', 'FRAMECAD', 'UNIT 5', 'Not Started', [cell(5, '90mm x 0.75'), cell(6, 'des@austruss.com.au', 'Dee Signer')]),
+  woRow(1, 'W-100', 'FRAMECAD', 'UNIT 5', 'Not Started', [cell(5, '90mm x 0.75'), cell(6, 'des@austruss.com.au', 'Dee Signer'), cell(7, 'Red 90')]),
   woRow(3, 'W-101', 'STRUCTURAL', 'ZONE 1', 'Not Started'),
   woRow(4, 'W-102', 'FRAMECAD', 'ZONE 2', 'Complete')
 ];
@@ -147,11 +147,42 @@ w.eval("Store.setWorkerUrl('https://x.workers.dev'); Store.setAppKey('k');");
 const jobs = JSON.parse(await w.eval('getWorkOrders().then(j => JSON.stringify(j))'));
 check('FRAMECAD jobs only, any status (the list decides which statuses show)', jobs.map(j => j.workOrderId), ['W-100', 'W-102']);
 check('gauge read from F_Profile, designer by name not email', [jobs[0].gauge, jobs[0].designer], ['90', 'Dee Signer']);
+check('scheduled machine read by title, blank when not booked', jobs.map(j => j.machine), ['Red 90', null]);
+w.eval(`AppState.jobs = ${JSON.stringify(jobs)}; AppState.jobSearchTerm = ''; renderJobList();`);
+check('job card shows the machine with its colour, or "No machine"',
+  [...d.querySelectorAll('.job-card .machine-chip')].map(e => e.className + ': ' + e.textContent),
+  ['machine-chip m-red: Red 90', 'machine-chip unset: No machine']);
+
+console.log('\njob list: in progress now / started');
+const H = 3600e3, NOW = Date.parse('2026-11-04T02:00:00Z'), at = h => new Date(NOW - h * H).toISOString();
+const open = w.eval(`openSessionsFrom(${JSON.stringify([
+  { work_order_id: 'W-1', event: 'start', session_start: at(1) },                        // open
+  { work_order_id: 'W-2', event: 'start', session_start: at(2) },                        // saved since
+  { work_order_id: 'W-2', event: 'end', session_start: at(2).replace('Z', '+00:00') },   // (Supabase's format)
+  { work_order_id: 'W-3', event: 'start', session_start: at(13) },                       // too old: never saved
+  { work_order_id: 'W-4', event: 'start', session_start: at(3) },                        // two tablets on one job:
+  { work_order_id: 'W-4', event: 'start', session_start: at(1) },                        // earliest start shows
+  { work_order_id: 'W-4', event: 'end', session_start: at(1) }
+])}, ${NOW})`);
+check('open sessions: started and not saved, from any tablet, within 12 hours', JSON.parse(JSON.stringify(open)), { 'W-1': at(1), 'W-4': at(3) });
+w.eval(`AppState.jobs = ${JSON.stringify([
+  Object.assign({}, jobs[0], { liveSince: at(1), sessionCount: 2, complete: 'Partially Complete' }),
+  Object.assign({}, jobs[0], { workOrderId: 'W-5', liveSince: null, sessionCount: 1, complete: 'Not Started' }),
+  Object.assign({}, jobs[0], { workOrderId: 'W-6', liveSince: null, sessionCount: 0, complete: 'Not Started' })
+])}; renderJobList();`);
+check('card top: In progress token (if open), then Started / Not started; no Smartsheet badge',
+  [...d.querySelectorAll('.job-card')].map(c => [...c.querySelectorAll('.status-tokens > span')].map(e => e.textContent)),
+  [['In progress', 'Started'], ['Started'], ['Not started']]);
+w.eval(`AppState.jobs[0].complete = 'Complete'; AppState.jobs[0].liveSince = null; renderJobList();`);
+check('a job Smartsheet marks Complete says Complete', d.querySelector('.job-card .started-token').textContent, 'Complete');
+check('no status badge left on any card', d.querySelectorAll('.job-card .badge').length, 0);
+
+console.log('\nwork orders from the Work Order sheet');
 reportCalls.length = 0;
 const fromSheet = JSON.parse(await w.eval("getWorkOrders(null, CONFIG.WORK_ORDER_SHEET_ID).then(j => JSON.stringify(j))"));
 check('the Work Order sheet is read in full, FRAMECAD only', fromSheet.length, 990);
 check('only the columns the app needs are downloaded, found by title',
-  reportCalls, ['sheet columns', 'sheet 8417646009601924 p1 cols 101,102,103,104,105,106', 'sheet 8417646009601924 p2 cols 101,102,103,104,105,106', 'sheet 8417646009601924 p3 cols 101,102,103,104,105,106']);
+  reportCalls, ['sheet columns', 'sheet 8417646009601924 p1 cols 101,102,103,104,105,106,107', 'sheet 8417646009601924 p2 cols 101,102,103,104,105,106,107', 'sheet 8417646009601924 p3 cols 101,102,103,104,105,106,107']);
 check('sheet rows get the sheet id (reports carry their own)', [fromSheet[0].sheetId, jobs[0].sheetId], ['8417646009601924', 2]);
 check('newest work order first', [fromSheet[0].workOrderId, fromSheet[fromSheet.length - 1].workOrderId], ['W-21099', 'W-20000']);
 
@@ -170,7 +201,7 @@ check('no Complete job in it', d.querySelectorAll('.job-card .badge.complete').l
 const fetchedSoFar = reportCalls.length;
 click(tabs()[2]);
 await tick(50);
-check('Completed: every Complete FRAMECAD work order, badged green', [d.querySelectorAll('.job-card').length, d.querySelectorAll('.job-card .badge.complete').length], [220, 220]);
+check('Completed: every Complete FRAMECAD work order, marked Complete', [d.querySelectorAll('.job-card').length, d.querySelectorAll('.job-card .started-token.complete').length], [220, 220]);
 check('switching between the two shares one fetch', reportCalls.length, fetchedSoFar);
 click($('btnRefreshJobs'));
 await waitFor(() => reportCalls.length > fetchedSoFar);
@@ -315,7 +346,8 @@ w.fetch = okFetch;
 // Normal job. The real report names don't match CONFIG.DETAILER_NAME_RE, so
 // the operator picks it; the bay has accepted that.
 rowAttachments = [att(10, REPORT), att(11, DRAWINGS), att(12, 'IN PROGRESS: 90 - LB WALLS.pdf'), att(13, 'notes.dxf')];
-w.eval("openJob({rowId:1, sheetId:2, workOrderId:'W-100', zone:'UNIT 5'})");
+w.eval("openJob({rowId:1, sheetId:2, workOrderId:'W-100', zone:'UNIT 5', machine:'Red 90'})");
+check('the open job\'s header shows its machine', $('jobHeader').textContent, 'W-100 \u2014 UNIT 5Red 90');
 await waitFor(() => $('modalOverlay').classList.contains('show'));
 check('picker lists only the original PDFs (no IN PROGRESS, no .dxf)',
   [...d.querySelectorAll('#modalList .pick-row .fname')].map(e => e.textContent.trim()), [REPORT, DRAWINGS]);
@@ -397,7 +429,11 @@ click($('btnStartJob'));
 check('Start Job swaps to the session status', [$('btnStartJob').style.display, $('sessionStatus').style.display], ['none', 'block']);
 check('session start kept on the device with the frames done so far',
   JSON.parse(w.localStorage.getItem('fc_session_1')).doneAtStart, ['L500']);
-check('Start Job alone writes nothing', calls.filter(c => c.method === 'POST').length, 0);
+const startPosts = calls.filter(c => c.method === 'POST');
+const startRow = startPosts[0] ? JSON.parse(startPosts[0].body) : {};
+check('Start Job alone only marks the job in progress for other tablets (no session logged)',
+  [startPosts.map(c => new URL(c.url).pathname), startRow.event, startRow.work_order_id, startRow.session_start],
+  [['/rest/v1/session_activity'], 'start', 'W-100', JSON.parse(w.localStorage.getItem('fc_session_1')).startTime]);
 click(rows()[1]);   // L501 done during the session
 
 w.eval(`
@@ -421,6 +457,9 @@ check('session logged to Supabase with only this session\'s frames',
   [logged.frames_completed_this_session, logged.frames_completed_count, logged.linear_metres_this_session],
   [['L501'], 1, 10.5]);
 check('and the job totals at this save', [logged.total_frames_done, logged.total_linear_metres_done], [2, 30.5]);
+const endCall = calls.find(c => c.url.includes('/rest/v1/session_activity') && c.method === 'POST');
+check('a logged save closes the live session (same start time)',
+  endCall && [JSON.parse(endCall.body).event, JSON.parse(endCall.body).session_start], ['end', startRow.session_start]);
 check('session cleared after saving',
   [$('sessionStatus').style.display, w.localStorage.getItem('fc_session_1')], ['none', null]);
 
@@ -435,7 +474,7 @@ up = uploads[0] ? new URL(uploads[0].url).searchParams : new URLSearchParams();
 check('later saves: a new version of the report\'s live id, not the stale one',
   [up.get('mode'), up.get('attachmentId'), up.get('filename')], ['version', '60', REPORT]);
 check('still keyworded with the clean source', w.eval('JSON.stringify(window.__keywords)'), '["austruss-fc-markup","fc-source:10"]');
-check('no session running: nothing logged', calls.some(c => c.url.includes('/rest/v1/session_log')), false);
+check('no session running: nothing logged', calls.some(c => c.url.includes('/rest/v1/session_log') || c.url.includes('/rest/v1/session_activity')), false);
 
 /* ------------------------------------------------ versions: which to use */
 console.log('\nversions: which report version to work from');
